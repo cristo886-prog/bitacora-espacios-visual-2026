@@ -1,5 +1,6 @@
 {
-  "endpoint": null,
-  "status": "pending_deployment",
-  "description": "Conexión única de actualización de datos para todos los usuarios. Pendiente URL real de Apps Script."
+  "endpoint": "https://script.google.com/a/macros/fastmoda.com.co/s/AKfycbxKOMSKpoTO-IS9FbjJt7q2fb5uiFfNEHpt2VNpoU6p2-gzr8G8YbX1y7PdPBfDRxop/exec",
+  "status": "configured",
+  "mode": "google_native",
+  "domain": "fastmoda.com.co"
 }
