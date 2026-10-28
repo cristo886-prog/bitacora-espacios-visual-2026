@@ -125,7 +125,7 @@ function cardDelivery(c,rs){
  return '<div class="card-delivery"><span>Entrega completa <b>'+m.completePct+'%</b></span><div class="delivery-track"><span style="width:'+m.completePct+'%"></span></div><small>'+fmt(m.complete)+' de '+fmt(m.approved)+' unidades · '+m.dispatchPct+'% con guía</small></div>';
 }
 function actionStats(c,rs){const actions=c.id==='nanny'?[[15,'Arreglar'],[16,'Desde stock'],[17,'Nuevas + devolución']]:[[31,'Arreglar'],[32,'Enviar'],[33,'Pintar']];return '<div class="action-chips" aria-label="Filtrar tiendas por acción"><span>Acción</span><button type="button" data-action="" class="'+(!actionFilter?'selected':'')+'" aria-pressed="'+(!actionFilter)+'">Todas</button>'+actions.map(([i,title])=>'<button type="button" data-action="'+i+'" class="'+(String(actionFilter)===String(i)?'selected':'')+'" aria-pressed="'+(String(actionFilter)===String(i))+'">'+title+' <b>'+fmt(total(rs,i))+'</b></button>').join('')+'</div>'}
-function renderBase(){const rs=rows();$('count').textContent=rs.length+' tiendas';$('cut').textContent='Corte de datos: '+new Date(DATA.updatedAt).toLocaleString('es-CO')+' · 5 regionales verificadas';const c=cards.find(c=>c.id===active);if(active==='master'){
+function renderBase(){const rs=rows();$('count').textContent=rs.length+' tiendas';$('cut').textContent='Corte de datos: '+new Date(DATA.updatedAt).toLocaleString('es-CO')+' · 5 regionales consultadas'+(DATA.sync?.mode==='read_only'?' · Sincronización de archivos pendiente':'');const c=cards.find(c=>c.id===active);if(active==='master'){
 const selected=cards.find(c=>c.id===masterReference);
 const filtered=(selected?rs.filter(r=>relevant(selected,r)):rs).filter(r=>selected?.id!=='furniture'||furnitureMatches(r,furnitureReference));
 $('count').textContent=filtered.length+' tiendas';
@@ -204,12 +204,13 @@ async function reloadPublishedAudit(){
   }
   $('cut').textContent='Actualizando los 5 archivos regionales y consultando la base…';
   const next=await new Promise((resolve,reject)=>google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).doGet({parameter:{data:'1'}}));
+  if(!next||typeof next!=='object')throw Error('Google no devolvió los datos. Verifica el acceso con tu cuenta empresarial');
   if(next.error)throw Error(next.error);
-  if(!next.audit||!Array.isArray(next.masterUpdates)||next.filesUpdated!==5||!Array.isArray(next.missingPickups)||!Number.isFinite(Date.parse(next.updatedAt)))throw Error('No se confirmó la actualización de los 5 archivos');
+  if(!next.audit||!Array.isArray(next.masterUpdates)||(next.filesRead??next.filesUpdated)!==5||!Array.isArray(next.missingPickups)||!Number.isFinite(Date.parse(next.updatedAt)))throw Error('No se confirmó la consulta de los 5 archivos');
   const byId=new Map(next.masterUpdates.map(r=>[String(r[0]),r]));const mapping={"0": 0, "1": 1, "2": 2, "3": 3, "4": 7, "5": 8, "6": 9, "7": 13, "8": 14, "10": 15, "11": 19, "12": 20, "13": 21, "14": 22, "15": 23, "16": 24, "17": 25, "18": 26, "19": 27, "20": 33, "21": 34, "22": 35, "23": 36, "24": 40, "25": 41, "26": 42, "27": 46, "28": 47, "29": 48, "30": 49, "31": 53, "32": 54, "33": 55, "34": 56, "35": 63, "36": 64, "37": 65};const existing=new Set(DATA.master.slice(1).map(r=>String(r[0])));for(const source of next.masterUpdates){if(!existing.has(String(source[0]))){const added=Array(DATA.master[0].length).fill('');added[0]=source[0];DATA.master.push(added);existing.add(String(source[0]));}}for(const row of DATA.master.slice(1)){const source=byId.get(String(row[0]));if(source)for(const [dest,origin]of Object.entries(mapping))row[Number(dest)]=source[origin]??'';}
- DATA.audit=next.audit;if(next.returnSummary)DATA.returnSummary=next.returnSummary;DATA.updatedAt=next.updatedAt;DATA.missingPickups=next.missingPickups;DATA.sync={filesUpdated:5,verifiedAt:next.updatedAt,liveConnected:true};
- refreshAuditLabels();init();$('cut').textContent='Actualizado: '+new Date(DATA.updatedAt).toLocaleString('es-CO',{timeZone:'America/Bogota'})+' · 5 de 5 regionales verificadas';
-  button.textContent='✓ Actualizado';
+ DATA.audit=next.audit;if(next.returnSummary)DATA.returnSummary=next.returnSummary;DATA.updatedAt=next.updatedAt;DATA.missingPickups=next.missingPickups;DATA.sync={filesRead:next.filesRead??5,filesUpdated:next.filesUpdated,mode:next.syncMode||'synchronized',warning:next.syncWarning||'',verifiedAt:next.updatedAt,liveConnected:true};
+ refreshAuditLabels();init();$('cut').textContent='Actualizado: '+new Date(DATA.updatedAt).toLocaleString('es-CO',{timeZone:'America/Bogota'})+' · 5 de 5 regionales consultadas'+(DATA.sync.mode==='read_only'?' · '+DATA.sync.warning:' · Archivos sincronizados');
+  button.textContent=DATA.sync.mode==='read_only'?'✓ Datos consultados':'✓ Actualizado';
  }catch(error){$('cut').textContent='No se actualizó. '+error.message+'. Se conserva el último corte.';button.textContent='Reintentar actualización';}
  finally{button.disabled=false}
 }
