@@ -191,19 +191,37 @@ function refreshAuditLabels(){
 document.addEventListener('change',e=>{if(e.target.matches('[data-audit-store]')){auditStore=e.target.value;render()}});
 document.addEventListener('click',e=>{if(e.target.closest('[data-card]')||e.target.closest('[data-back]'))auditStore='';},true);
 function validLiveEndpoint(value){try{const u=new URL(value);return u.protocol==='https:'&&u.hostname==='script.google.com'&&(/^\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(u.pathname)||/^\/a\/macros\/fastmoda\.com\.co\/s\/[A-Za-z0-9_-]+\/exec$/.test(u.pathname))&&!u.search&&!u.hash}catch(e){return false}}
+async function consultarDatosActuales(){
+ if(typeof google!=='undefined'&&google.script&&google.script.run){
+  return new Promise((resolve,reject)=>google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).doGet({parameter:{data:'1'}}));
+ }
+ const response=await fetch(new URL('live-config.json?t='+Date.now(),document.baseURI),{cache:'no-store'});
+ if(!response.ok)throw Error('No se pudo consultar la conexión de datos');
+ const config=await response.json();if(!validLiveEndpoint(config.endpoint))throw Error('Conexión de datos sin configurar');
+ return new Promise((resolve,reject)=>{
+  const nonce=Array.from(crypto.getRandomValues(new Uint8Array(24)),b=>b.toString(16).padStart(2,'0')).join('');
+  const frame=document.createElement('iframe');frame.hidden=true;frame.title='Consulta de datos';frame.setAttribute('aria-hidden','true');
+  let timer;
+  const cleanup=()=>{clearTimeout(timer);window.removeEventListener('message',receive);frame.remove();};
+  const receive=event=>{
+   let origin;try{origin=new URL(event.origin)}catch(e){return}
+   if(origin.protocol!=='https:'||!(origin.hostname==='script.google.com'||origin.hostname==='script.googleusercontent.com'||/^[a-z0-9-]+(?:[.-]script)\.googleusercontent\.com$/.test(origin.hostname)))return;
+   const message=event.data;if(!message||message.type!=='bitacora-data'||message.nonce!==nonce)return;
+   cleanup();if(message.error)reject(Error(message.error));else resolve(message.result);
+  };
+  window.addEventListener('message',receive);
+  timer=setTimeout(()=>{cleanup();reject(Error('Google no respondió. Mantén iniciada tu cuenta empresarial y permite su acceso en este navegador'));},150000);
+  const url=new URL(config.endpoint);url.searchParams.set('bridge','1');url.searchParams.set('nonce',nonce);url.searchParams.set('t',Date.now());frame.src=url.href;
+  document.body.appendChild(frame);
+ });
+}
+
 async function reloadPublishedAudit(){
  const button=$('update');if(button.disabled)return;
  button.disabled=true;button.textContent='Actualizando…';
  try{
-  if(!(typeof google!=='undefined'&&google.script&&google.script.run)){
-   const response=await fetch(new URL('live-config.json?t='+Date.now(),document.baseURI),{cache:'no-store'});
-   if(!response.ok)throw Error('No se pudo consultar la conexión compartida');
-   const config=await response.json();if(!validLiveEndpoint(config.endpoint))throw Error('Conexión empresarial sin configurar');
-   $('cut').textContent='Abriendo la versión empresarial para actualizar los 5 regionales…';
-   window.location.assign(config.endpoint);return;
-  }
-  $('cut').textContent='Actualizando los 5 archivos regionales y consultando la base…';
-  const next=await new Promise((resolve,reject)=>google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).doGet({parameter:{data:'1'}}));
+  $('cut').textContent='Consultando la base y los 5 archivos regionales…';
+  const next=await consultarDatosActuales();
   if(!next||typeof next!=='object')throw Error('Google no devolvió los datos. Verifica el acceso con tu cuenta empresarial');
   if(next.error)throw Error(next.error);
   if(!next.audit||!Array.isArray(next.masterUpdates)||(next.filesRead??next.filesUpdated)!==5||!Array.isArray(next.missingPickups)||!Number.isFinite(Date.parse(next.updatedAt)))throw Error('No se confirmó la consulta de los 5 archivos');
