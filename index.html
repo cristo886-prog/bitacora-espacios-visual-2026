@@ -247,20 +247,24 @@ function refreshSourceSummaries(){
  set('paint',pp.length+' tiendas: '+executed+' ejecutadas · '+(pp.length-executed-blank)+' con observaciones'+(blank?' · '+blank+' sin reporte en Y.':'.'));
 }
 
-function openLiveData(){
- if(typeof google!=='undefined'&&google.script&&google.script.run){return reloadPublishedAudit();}
- // A top-level navigation allows Google account selection and first-party authentication.
- // The Google dashboard reads the source and the five regional files before rendering.
- const destination=new URL(LIVE_DATA_ENDPOINT);
- if(!validLiveEndpoint(destination.href)){
-  $('cut').textContent='No se pudo abrir la conexión empresarial. Se conserva el corte publicado.';return;
- }
- $('update').textContent='Abriendo consulta…';
- window.location.assign(destination.href);
+async function openLiveData(){
+ const button=$('update');if(button.disabled)return;
+ button.disabled=true;button.textContent='Actualizando…';
+ try{
+  const response=await fetch(new URL('auditoria-data.json?t='+Date.now(),document.baseURI),{cache:'no-store',credentials:'omit'});
+  if(!response.ok)throw Error('No se pudo cargar el corte publicado');
+  const next=await response.json();
+  if(!Array.isArray(next.master)||next.master.length<2||!next.audit||!Number.isFinite(Date.parse(next.updatedAt)))throw Error('Datos publicados incompletos');
+  if(Date.parse(next.updatedAt)<Date.parse(DATA.updatedAt))throw Error('El corte disponible es anterior al mostrado');
+  DATA=next;refreshAuditLabels();init();
+  $('cut').textContent='Último corte publicado: '+new Date(DATA.updatedAt).toLocaleString('es-CO',{timeZone:'America/Bogota'})+' · Consulta pública sin inicio de sesión';
+  button.textContent='✓ Corte publicado cargado';
+ }catch(error){$('cut').textContent=error.message+'. Se conserva la información visible.';button.textContent='Reintentar actualización';}
+ finally{button.disabled=false;}
 }
 $('update').onclick=openLiveData;
-$('update').title='Consultar datos actuales en Google con tu cuenta laboral';
-$('update').textContent='Actualizar datos ↗';
+$('update').title='Cargar el último corte publicado, sin iniciar sesión';
+$('update').textContent='Actualizar datos';
 
 refreshAuditLabels();
 
@@ -279,6 +283,6 @@ function showStoreAnnexes(id){
 document.addEventListener('click',e=>{const target=e.target.closest('[data-annex-store]');if(target)showStoreAnnexes(target.dataset.annexStore);if(e.target.closest('#closeAnnexes'))$('storeAnnexes').close();});
 
 init();
-$('cut').textContent='Corte actualizado: '+new Date(DATA.updatedAt).toLocaleString('es-CO',{timeZone:'America/Bogota'})+' · Consolidado y 5 regionales consultadas · Actualizar datos abre la consulta de Google';
+$('cut').textContent='Corte actualizado: '+new Date(DATA.updatedAt).toLocaleString('es-CO',{timeZone:'America/Bogota'})+' · Consolidado y 5 regionales consultadas · Acceso público sin inicio de sesión';
 
 </script><dialog id="storeAnnexes" aria-labelledby="annexTitle"><header class="annex-heading"><div><small id="annexStore"></small><h2 id="annexTitle">Gestión y anexos</h2></div><button type="button" id="closeAnnexes" aria-label="Cerrar anexos">Cerrar ×</button></header><div id="annexContent"></div></dialog></body></html>
