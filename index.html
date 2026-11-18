@@ -156,15 +156,14 @@ function carrierMetrics(records){
 }
 function carrierSummary(records){
  const metrics=carrierMetrics(records);
- if(!metrics.reported||!metrics.approved)return '';
  const stages=[
   {state:'ENTREGADO',label:'Entregado',style:'delivered'},
   {state:'EN DISTRIBUCIÓN',label:'En distribución',style:'distribution'},
-  {state:'PENDIENTE DESPACHO',label:'Pendiente despacho',style:'pending-dispatch'}
+  {state:'PENDIENTE DESPACHO',label:'Pendiente envío',style:'pending-dispatch'}
  ];
- const percent=units=>Math.round(units/metrics.approved*100);
+ const percent=units=>metrics.approved?Math.round(units/metrics.approved*100):0;
  const segments=stages.map(stage=>'<span class="'+stage.style+'" style="width:'+
-  (metrics.units[stage.state]/metrics.approved*100)+'%"></span>').join('');
+  (metrics.approved?metrics.units[stage.state]/metrics.approved*100:0)+'%"></span>').join('');
  const legend=stages.map(stage=>'<span class="'+stage.style+'">'+stage.label+
   ' <b>'+percent(metrics.units[stage.state])+'%</b><small>'+fmt(metrics.units[stage.state])+
   ' / '+fmt(metrics.approved)+' unidades</small></span>').join('');
